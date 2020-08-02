@@ -19,16 +19,24 @@ int main(int argc, char **argv) {
   }
   
   /* Bind server socket */
-  struct sockaddr_in address;
-  address.sin_family = AF_INET;
-  address.sin_addr.s_addr = INADDR_ANY; 
-  address.sin_port = htons(PORT);
-  if (bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
+  struct sockaddr_in server_addr;
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = INADDR_ANY; 
+  server_addr.sin_port = htons(PORT);
+  if (bind(server_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
     perror("Failed to bind server socket");
     exit(EXIT_FAILURE);
   }
 
   /* Listen for connections */
   listen(server_fd, 5);
+
+  /* Main connection loop */
+  int client_fd;
+  struct sockaddr_in client_addr;
+  socklen_t client_len = sizeof(client_addr);
+  while ((client_fd = accept(server_fd, (struct sockaddr*) &client_addr, &client_len))) {
+    printf("Hello\n");
+  } /* end while */ 
 
 } /* main() */
