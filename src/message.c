@@ -3,10 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <arpa/inet.h>
 
 
 /*
- * Reads data from buffer and parses into message struct
+ * Reads data from socket recv buffer and parses into message struct
  */
 message_t *parse_data(uint8_t *buffer, int len) {
   assert(buffer);
@@ -17,6 +18,7 @@ message_t *parse_data(uint8_t *buffer, int len) {
 
   msg->type = buffer[0];
   memcpy(&(msg->length), &buffer[1], 2);
+  msg->length = ntohs(msg->length); /* convert to host order */
   
   msg->data = malloc(len - 3);
   assert(msg->data);
@@ -39,6 +41,8 @@ uint8_t *write_message(message_t *msg, int *len) {
   assert(buffer);
 
   buffer[0] = msg->type;
+
+  msg->length = htons(msg->length); /* convert to network order */
   memcpy(&buffer[1], &(msg->length), 2);
   memcpy(&buffer[3], msg->data, msg->length);
   
