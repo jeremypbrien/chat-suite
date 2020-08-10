@@ -29,6 +29,7 @@ void add_task(int, void*);
 void free_client_node(client_node_t *);
 
 void send_message(message_t *);
+message_t *receive_message(int, int*);
 
 
 #endif /* _SERVER_H */

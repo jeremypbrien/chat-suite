@@ -2,17 +2,25 @@
 #define _MESSAGE_H
 
 #include <stdint.h>
+#include <stdio.h>
+
+/* Debug print */
+#ifdef DEBUG
+#define DEBUG_PRINT(...) do { fprintf(stderr, __VA_ARGS__ ); } while(0)
+#else
+#define DEBUG_PRINT(...) do {} while (0)
+#endif
 
 /* Message configs */
 #define MAX_MESSAGE_SIZE 65535 /* max size of data */
 #define PORT 8080
 
 /* message type */
-#define ERROR 0
-#define INFO 1
-#define LOGIN 2
-#define DISCONNECT 3
-#define MESSAGE 4
+#define MESSAGE 0
+#define LOGIN 1
+#define DISCONNECT 2
+#define INFO 3
+#define ERROR 4
 
 
 /*

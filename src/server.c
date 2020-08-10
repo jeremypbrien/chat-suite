@@ -59,6 +59,7 @@ int main(int argc, char **argv) {
   struct sockaddr_in client_addr;
   socklen_t client_len = sizeof(client_addr);
   while ((fd = accept(server_fd, (struct sockaddr*) &client_addr, &client_len))) {
+    assert(fd > 0);
     pthread_t client_thread;
 
     /* Create pointer for client fd to be passed to thread */
@@ -77,6 +78,7 @@ int main(int argc, char **argv) {
  * Adds client to list of connected clients
  */
 void add_client(client_node_t *node) {
+  DEBUG_PRINT("Adding client: %d\n", node->fd);
   if (g_client_list_head == NULL) {
     g_client_list_head = node;
     return;
@@ -95,6 +97,7 @@ void add_client(client_node_t *node) {
  * Client node is freed by queue_handler
  */
 void remove_client(client_node_t *node) {
+  DEBUG_PRINT("Removing client: %d\n", node->fd);
   if (g_client_list_head == node) {
     g_client_list_head = node->next_client;
     return;
@@ -134,9 +137,17 @@ void *connection_handler(void *data) {
   /* Create task to add user */
   add_task(LOGIN, (void*) client_node);
 
-  /* TODO mainloop for client */
-  while (client_node->connected) {
-  }
+  /* mainloop for client */
+  while (1) {
+    int ret;
+    message_t *msg = receive_message(client_node->fd, &ret);
+    if (ret != 0) {
+      client_node->connected = false; /* alert send_message of disconnect */
+      break;
+    }
+    add_task(MESSAGE, (void*) msg);
+  } /* end mainloop */
+  DEBUG_PRINT("Client <%d> connection closed\n", client_node->fd);
 
   /* Handle client disconnect */
   add_task(DISCONNECT, (void*) client_node);
@@ -144,6 +155,39 @@ void *connection_handler(void *data) {
 
   return NULL;
 } /* connection_handler() */
+
+
+message_t *receive_message(int fd, int *return_val) {
+  /* Get header */
+  uint8_t buffer[3] = {0};
+  int ret = recv(fd, (void*) buffer, 3, 0);
+  if (ret != 3) {
+    *return_val = -1;
+    return NULL;
+  }
+
+  /* Create msg and allocate buffer */
+  message_t *msg = malloc(sizeof(message_t));
+  assert(msg);
+  msg->type = buffer[0];
+  msg->length = ntohs(*(&buffer[1]));
+  msg->data = malloc(msg->length);
+  assert(msg->data);
+
+  /* Receive remaining data */
+  int total = 0;
+  while (total < msg->length) {
+    ret = recv(fd, (void*) &((msg->data)[total]), msg->length - total, 0);
+    if (ret < 0) { /* TODO check errno and handle accordingly */
+      *return_val = -1;
+      free_message(msg);
+      return NULL;
+    }
+    total += ret;
+  }
+  *return_val = 0;
+  return msg;
+} /* receive_message() */
 
 
 /*
@@ -154,7 +198,7 @@ void *queue_handler(void *unused) {
     /* waits until queue has task */
     while (g_queue_head == NULL) {
     }
-    
+
     /* remove first task from queue */
     pthread_mutex_lock(&g_queue_list_lock);
     queue_node_t *task = g_queue_head;
@@ -162,14 +206,7 @@ void *queue_handler(void *unused) {
     pthread_mutex_unlock(&g_queue_list_lock);
 
     /* Perform task */
-    if (task->type == ERROR) {
-      //TODO
-    }
-    else if (task->type == INFO) {
-      //TODO
-    }
-    else if (task->type == LOGIN) {
-      puts("LOGIN");
+    if (task->type == LOGIN) {
       /* Get client node and add to list of clients */
       client_node_t *node = (client_node_t*) task->data;
       add_client(node);
@@ -191,7 +228,6 @@ void *queue_handler(void *unused) {
       free(task);
     }
     else if (task->type == DISCONNECT) {
-      puts("DISCONNECT");
       /* Get client node and remove list of clients */
       client_node_t *node = (client_node_t*) task->data;
       remove_client(node);
@@ -211,19 +247,22 @@ void *queue_handler(void *unused) {
       free(task);
       free_client_node(node);
     } 
-    else if (task->type == MESSAGE) {
-      //TODO
-    }
     else {
-      printf("WARNING: Unknown task with type: %d\n", task->type);
+      /* Get message and send to clients */
+      message_t *msg = (message_t*) task->data;
+      send_message(msg);
+
+      /* Free memory */
+      free_message(msg);
+      free(task);
     }
   } /* end while */
-  printf("WARNING: Exiting %s\n", __func__);
   return NULL;
 } /* queue_handler() */
 
 
 void send_message(message_t *msg) {
+  DEBUG_PRINT("Echoing msg with type <%d> to clients\n", msg->type);
   /* Create buffer to send data */
   int length = msg->length + 3;
   uint8_t *buffer = malloc(length);
@@ -276,6 +315,7 @@ void add_task(int type, void *data) {
     current_node = current_node->next_task;
   }
   current_node->next_task = node;
+  DEBUG_PRINT("Added task with type <%d>\n", node->type);
   pthread_mutex_unlock(&g_queue_list_lock);
 
 } /* add_task() */

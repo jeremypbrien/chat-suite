@@ -6,8 +6,8 @@ CC := gcc
 GTK_CFLAGS = `pkg-config --cflags gtk+-3.0`
 GTK_LIBS = -lm `pkg-config --libs gtk+-3.0`
 
-CPPFLAGS := -Iinclude -D _GNU_SOURCE
-CFLAGS   := -g -Wall -std=c99
+CPPFLAGS := -Iinclude -D _GNU_SOURCE -D DEBUG
+CFLAGS   := -g -Wall
 LDFLAGS  := -Llib
 LDLIBS   := -lpthread
 
