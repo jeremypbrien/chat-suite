@@ -2,6 +2,7 @@
 #include "message.h"
 
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +10,10 @@
 #include <pthread.h>
 #include <assert.h>
 #include <unistd.h>
+#include <signal.h>
+#include <stdint.h>
+#include <errno.h>
+#include <stdbool.h>
 
 
 client_node_t *g_client_list_head = NULL;
@@ -17,6 +22,7 @@ queue_node_t *g_queue_head = NULL;
 pthread_mutex_t g_queue_list_lock;
 
 int main(int argc, char **argv) {
+  signal(SIGPIPE, SIG_IGN);
 
   /* Create server socket */
   int server_fd;
@@ -123,11 +129,14 @@ void *connection_handler(void *data) {
   client_node->username = username;
   client_node->next_client = NULL;
   client_node->fd = client_fd;
+  client_node->connected = true;
 
   /* Create task to add user */
   add_task(LOGIN, (void*) client_node);
 
   /* TODO mainloop for client */
+  while (client_node->connected) {
+  }
 
   /* Handle client disconnect */
   add_task(DISCONNECT, (void*) client_node);
@@ -160,6 +169,7 @@ void *queue_handler(void *unused) {
       //TODO
     }
     else if (task->type == LOGIN) {
+      puts("LOGIN");
       /* Get client node and add to list of clients */
       client_node_t *node = (client_node_t*) task->data;
       add_client(node);
@@ -168,7 +178,7 @@ void *queue_handler(void *unused) {
       message_t *msg = malloc(sizeof(message_t));
       assert(msg);
       msg->type = LOGIN;
-      msg->length = strlen(node->username);
+      msg->length = strlen(node->username) + 1;
       msg->data = malloc(msg->length);
       assert(msg->data);
       strncpy((char*) msg->data, node->username, msg->length + 1);
@@ -181,6 +191,7 @@ void *queue_handler(void *unused) {
       free(task);
     }
     else if (task->type == DISCONNECT) {
+      puts("DISCONNECT");
       /* Get client node and remove list of clients */
       client_node_t *node = (client_node_t*) task->data;
       remove_client(node);
@@ -189,10 +200,10 @@ void *queue_handler(void *unused) {
       message_t *msg = malloc(sizeof(message_t));
       assert(msg);
       msg->type = DISCONNECT;
-      msg->length = strlen(node->username);
+      msg->length = strlen(node->username) + 1;
       msg->data = malloc(msg->length);
       assert(msg->data);
-      strncpy((char*) msg->data, node->username, msg->length + 1);
+      strncpy((char*) msg->data, node->username, msg->length);
       send_message(msg);
 
       /* Free memory */
@@ -213,8 +224,30 @@ void *queue_handler(void *unused) {
 
 
 void send_message(message_t *msg) {
-  printf("%s\n", (char*) msg->data);
-  //TODO
+  /* Create buffer to send data */
+  int length = msg->length + 3;
+  uint8_t *buffer = malloc(length);
+  assert(buffer);
+  
+  /* Fill buffer */
+  uint16_t network_length = htons(msg->length);
+  buffer[0] = msg->type;
+  memcpy(&buffer[1], &network_length, 2);
+  memcpy(&buffer[3], msg->data, msg->length);
+  
+  /* Send to each client */
+  client_node_t *node = g_client_list_head;
+  while (node != NULL) {
+    if (node->connected) {
+      send(node->fd, (void*) buffer, length, 0);
+      //TODO MAKE SURE ALL DATA IS SENT SEND() DOES NOT ALWAYS WORK
+      if ((errno == EPIPE) || (errno == ECONNRESET)) {
+        node->connected = false;
+      }
+    }
+    node = node->next_client;
+  }
+  free(buffer);
 } /* send_message() */
 
 

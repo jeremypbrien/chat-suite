@@ -15,6 +15,22 @@
 #define MESSAGE 4
 
 
+/*
+ * MESSAGE DATA FORMAT
+ * 1st byte: type of message
+ * 2nd and 3rd byte: length of data following
+ * All lengths are in network order (big endian) and unsigned
+ * 
+ * Types of data:
+ * ERROR:      String containing error message
+ * INFO:       String containing info message
+ * LOGIN:      String containing username of client joining
+ * DISCONNECT: String containing username of client disconnecting
+ * MESSAGE: Length of username, username, length of message, message
+ *          1 byte (n value), n bytes, 2 bytes (m value), m bytes
+ */
+
+
 typedef struct message_s {
   uint8_t type; /* type of message */
   uint8_t *data; /* contents of message data */
@@ -22,9 +38,6 @@ typedef struct message_s {
 } message_t;
 
 // Function declarations
-message_t *parse_data(uint8_t*, int);
-uint8_t *write_message(message_t*, int*);
 void free_message(message_t*);
-uint16_t end_swap_16(uint8_t[2]);
 
 #endif /* _MESSAGE_H */

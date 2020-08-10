@@ -3,6 +3,9 @@ OBJ_DIR := obj
 
 CC := gcc
 
+GTK_CFLAGS = `pkg-config --cflags gtk+-3.0`
+GTK_LIBS = -lm `pkg-config --libs gtk+-3.0`
+
 CPPFLAGS := -Iinclude -D _GNU_SOURCE
 CFLAGS   := -g -Wall -std=c99
 LDFLAGS  := -Llib
@@ -19,7 +22,7 @@ update-tags:
 	ctags -R
 
 client: message
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LDLIBS) $(SRC_DIR)/client.c $(OBJ_DIR)/message.o -o client
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(GTK_CFLAGS) $(LDFLAGS) $(LDLIBS) $(GTK_LIBS) $(SRC_DIR)/client.c $(OBJ_DIR)/message.o -o client
 
 server: message
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LDLIBS) $(SRC_DIR)/server.c $(OBJ_DIR)/message.o -o server

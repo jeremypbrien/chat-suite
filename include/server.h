@@ -3,10 +3,13 @@
 
 #include "message.h"
 
+#include <stdbool.h>
+
 typedef struct client_node_s {
   char *username;
   struct client_node_s *next_client;
   int fd;
+  bool connected;
 } client_node_t;
 
 typedef struct queue_node_s {
