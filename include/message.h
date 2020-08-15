@@ -46,6 +46,7 @@ typedef struct message_s {
 } message_t;
 
 // Function declarations
+message_t *receive_message(int, int*);
 void free_message(message_t*);
 
 #endif /* _MESSAGE_H */

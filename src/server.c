@@ -119,20 +119,22 @@ void *connection_handler(void *data) {
   int client_fd = *((int*) data);
   free(data);
 
-  /* get username from client */
-  char *username;
-  /* TODO tmp username for testing */
-  asprintf(&username, "User%d", client_fd);
-
   /* Construct client object for list 
    * NOTE: eventually freed by queue_handler
    */
   client_node_t *client_node = malloc(sizeof(client_node_t));
   assert(client_node);
-  client_node->username = username;
   client_node->next_client = NULL;
   client_node->fd = client_fd;
   client_node->connected = true;
+
+  client_node->username = get_username(client_node->fd);
+  if (client_node->username == NULL) {
+    DEBUG_PRINT("Client <%d> failed username setup\n", client_node->fd);
+    shutdown(client_node->fd, SHUT_RDWR);
+    free_client_node(client_node);
+    return NULL;
+  }
 
   /* Create task to add user */
   add_task(LOGIN, (void*) client_node);
@@ -141,10 +143,13 @@ void *connection_handler(void *data) {
   while (1) {
     int ret;
     message_t *msg = receive_message(client_node->fd, &ret);
-    if (ret != 0) {
+    
+    /* Check return and message validity */
+    if ((ret != 0) || (!(validate_message(client_node, msg)))) {
       client_node->connected = false; /* alert send_message of disconnect */
       break;
     }
+
     add_task(MESSAGE, (void*) msg);
   } /* end mainloop */
   DEBUG_PRINT("Client <%d> connection closed\n", client_node->fd);
@@ -155,39 +160,6 @@ void *connection_handler(void *data) {
 
   return NULL;
 } /* connection_handler() */
-
-
-message_t *receive_message(int fd, int *return_val) {
-  /* Get header */
-  uint8_t buffer[3] = {0};
-  int ret = recv(fd, (void*) buffer, 3, 0);
-  if (ret != 3) {
-    *return_val = -1;
-    return NULL;
-  }
-
-  /* Create msg and allocate buffer */
-  message_t *msg = malloc(sizeof(message_t));
-  assert(msg);
-  msg->type = buffer[0];
-  msg->length = ntohs(*(&buffer[1]));
-  msg->data = malloc(msg->length);
-  assert(msg->data);
-
-  /* Receive remaining data */
-  int total = 0;
-  while (total < msg->length) {
-    ret = recv(fd, (void*) &((msg->data)[total]), msg->length - total, 0);
-    if (ret < 0) { /* TODO check errno and handle accordingly */
-      *return_val = -1;
-      free_message(msg);
-      return NULL;
-    }
-    total += ret;
-  }
-  *return_val = 0;
-  return msg;
-} /* receive_message() */
 
 
 /*
@@ -231,6 +203,9 @@ void *queue_handler(void *unused) {
       /* Get client node and remove list of clients */
       client_node_t *node = (client_node_t*) task->data;
       remove_client(node);
+
+      /* Alert client of disconnect */
+      shutdown(node->fd, SHUT_RDWR);
 
       /* Create msg and send to clients */
       message_t *msg = malloc(sizeof(message_t));
@@ -320,6 +295,22 @@ void add_task(int type, void *data) {
 
 } /* add_task() */
 
+
+bool validate_message(client_node_t *node, message_t *msg) {
+  assert(node);
+  assert(msg);
+
+  if (msg->type == MESSAGE) {
+    int username_size = msg->data[0];
+    char username[username_size];
+    strncpy(username, (char*) &((msg->data)[1]), username_size);
+    if (strncmp(username, node->username, username_size) != 0) {
+      return false;
+    }
+  }
+  return true;
+} /* validate_message() */
+
 /*
  * Frees node after removal from list
  */
@@ -329,3 +320,21 @@ void free_client_node(client_node_t *node) {
     free(node);
   }
 } /* free_client_node() */
+
+
+char *get_username(int fd) {
+  uint8_t size = 0;
+  int ret = recv(fd, &size, 1, 0);
+  if (ret != 1) {
+    return NULL;
+  }
+  char *username = malloc(size);
+  assert(username);
+  ret = recv(fd, username, size, 0);
+  if (ret != size) {
+    free(username);
+    return NULL;
+  }
+  assert(username[size - 1] == '\0');
+  return username;
+} /* get_username() */

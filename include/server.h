@@ -27,9 +27,10 @@ void add_client(client_node_t*);
 void remove_client(client_node_t*);
 void add_task(int, void*);
 void free_client_node(client_node_t *);
+bool validate_message(client_node_t *, message_t*);
+char *get_username(int);
 
 void send_message(message_t *);
-message_t *receive_message(int, int*);
 
 
 #endif /* _SERVER_H */
